@@ -5,69 +5,42 @@ const Product = require('../dao/models/productModel');
 // Ruta para obtener todos los productos
 router.get('/products', async (req, res) => {
     try {
-        const products = await Product.find();
-        res.json(products);
+        const { limit = 10, page = 1, sort, query, category, available } = req.query;
+
+        // Construye una consulta para filtrar y ordenar los productos según los parámetros
+        const filter = {};
+        if (category) {
+            filter.category = category;
+        }
+        if (available) {
+            filter.stock = { $gt: 0 };
+        }
+        const sortOrder = sort === 'desc' ? -1 : 1;
+
+        const totalProducts = await Product.countDocuments(filter);
+        const totalPages = Math.ceil(totalProducts / limit);
+        const skip = (page - 1) * limit;
+
+        const products = await Product.find(filter)
+            .sort({ price: sortOrder })
+            .skip(skip)
+            .limit(Number(limit));
+
+        const response = {
+            status: 'success',
+            payload: products,
+            totalPages,
+            prevPage: page > 1 ? page - 1 : null,
+            nextPage: page < totalPages ? page + 1 : null,
+            page,
+            hasPrevPage: page > 1,
+            hasNextPage: page < totalPages,
+            prevLink: page > 1 ? `/products?limit=${limit}&page=${page - 1}` : null,
+            nextLink: page < totalPages ? `/products?limit=${limit}&page=${page + 1}` : null,
+        };
+
+        res.json(response);
     } catch (error) {
         res.status(500).json({ error: 'Error al obtener productos.' });
     }
 });
-
-// Ruta para crear un nuevo producto
-router.post('/products', async (req, res) => {
-    const { title, description, price, thumbnail, code, stock } = req.body;
-    try {
-        const newProduct = new Product({ title, description, price, thumbnail, code, stock });
-        await newProduct.save();
-        res.status(201).json(newProduct);
-    } catch (error) {
-        res.status(400).json({ error: 'Error al crear un producto.' });
-    }
-});
-
-// Ruta para obtener un producto por su ID
-router.get('/products/:id', async (req, res) => {
-    const productId = req.params.id;
-    try {
-        const product = await Product.findById(productId);
-        if (!product) {
-            res.status(404).json({ error: 'Producto no encontrado.' });
-        } else {
-            res.json(product);
-        }
-    } catch (error) {
-        res.status(500).json({ error: 'Error al obtener el producto.' });
-    }
-});
-
-// Ruta para actualizar un producto por su ID
-router.put('/products/:id', async (req, res) => {
-    const productId = req.params.id;
-    const { title, description, price, thumbnail, code, stock } = req.body;
-    try {
-        const product = await Product.findByIdAndUpdate(productId, { title, description, price, thumbnail, code, stock });
-        if (!product) {
-            res.status(404).json({ error: 'Producto no encontrado.' });
-        } else {
-            res.json(product);
-        }
-    } catch (error) {
-        res.status(500).json({ error: 'Error al actualizar el producto.' });
-    }
-});
-
-// Ruta para eliminar un producto por su ID
-router.delete('/products/:id', async (req, res) => {
-    const productId = req.params.id;
-    try {
-        const product = await Product.findByIdAndDelete(productId);
-        if (!product) {
-            res.status(404).json({ error: 'Producto no encontrado.' });
-        } else {
-            res.json(product);
-        }
-    } catch (error) {
-        res.status(500).json({ error: 'Error al eliminar el producto.' });
-    }
-});
-
-module.exports = router;
